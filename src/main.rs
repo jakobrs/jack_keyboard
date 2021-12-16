@@ -1,15 +1,10 @@
 use std::{
     any::Any,
-    collections::HashSet,
     sync::mpsc::{self, Receiver, Sender},
 };
 
+use druid_shell::{Application, Code, KbKey, KeyEvent, WinHandler, WindowBuilder, WindowHandle};
 use jack::{Client, ClientOptions, ClosureProcessHandler, ProcessScope, RawMidi};
-use winit::{
-    event::{ElementState, Event, KeyboardInput, ScanCode, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
 
 fn main() {
     let (tx, rx) = mpsc::channel();
@@ -37,7 +32,7 @@ fn handle_jack(rx: Receiver<KeyboardMsg>) -> impl Any {
                 bytes: &[
                     if pressed { 0x91 } else { 0x81 }, // Command
                     note.to_midi_value(),              // Note
-                    0x70,                              // Velocity
+                    0x7f,                              // Velocity
                 ],
             }) {
                 Ok(_) => (),
@@ -53,73 +48,86 @@ fn handle_jack(rx: Receiver<KeyboardMsg>) -> impl Any {
         .unwrap()
 }
 
-fn run_gui(tx: Sender<KeyboardMsg>) {
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().with_title("JACK keyboard").build(&event_loop).unwrap();
+struct AppState {
+    handle: WindowHandle,
+    tx: Sender<KeyboardMsg>,
+}
 
-    #[cfg(unix)]
-    {
-        use winit::platform::unix::EventLoopWindowTargetExtUnix;
+impl WinHandler for AppState {
+    fn connect(&mut self, handle: &WindowHandle) {
+        self.handle = handle.clone();
+    }
 
-        if event_loop.is_wayland() {
-            println!("Running on Wayland");
-        } else if event_loop.is_x11() {
-            println!("Running on X11");
+    fn prepare_paint(&mut self) {
+        self.handle.invalidate();
+    }
+
+    fn paint(&mut self, _piet: &mut druid_shell::piet::Piet, _invalid: &druid_shell::Region) {
+        // println!("Would paint");
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn key_down(&mut self, event: druid_shell::KeyEvent) -> bool {
+        let KeyEvent {
+            key, code, repeat, ..
+        } = event;
+
+        if repeat {
+            return false;
+        }
+
+        if key == KbKey::Escape {
+            self.handle.close();
+        }
+
+        if let Some(note) = Note::from_code(code) {
+            self.tx
+                .send(KeyboardMsg {
+                    note,
+                    pressed: true,
+                })
+                .unwrap();
+        }
+
+        true
+    }
+
+    fn key_up(&mut self, event: KeyEvent) {
+        let KeyEvent { code, .. } = event;
+
+        if let Some(note) = Note::from_code(code) {
+            self.tx
+                .send(KeyboardMsg {
+                    note,
+                    pressed: false,
+                })
+                .unwrap();
         }
     }
 
-    let mut active_keys = HashSet::new();
+    fn request_close(&mut self) {
+        self.handle.close();
+    }
+}
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+fn run_gui(tx: Sender<KeyboardMsg>) {
+    let app_state = AppState {
+        tx,
+        handle: Default::default(),
+    };
 
-        match event {
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                scancode,
-                                state,
-                                virtual_keycode,
-                                ..
-                            },
-                        ..
-                    },
-                window_id,
-                ..
-            } if window_id == window.id() => {
-                if virtual_keycode == Some(VirtualKeyCode::Escape) {
-                    *control_flow = ControlFlow::Exit;
-                    return;
-                }
+    let app = Application::new().unwrap();
 
-                if state == ElementState::Pressed && active_keys.contains(&scancode) {
-                    // Ignore repeated keys
-                    return;
-                }
+    let mut window_builder = WindowBuilder::new(app.clone());
+    window_builder.set_title("JACK keyboard");
+    window_builder.set_handler(Box::new(app_state));
+    let window = window_builder.build().unwrap();
+    window.show();
 
-                match state {
-                    ElementState::Pressed => active_keys.insert(scancode),
-                    ElementState::Released => active_keys.remove(&scancode),
-                };
-
-                if let Some(note) = Note::from_scancode(scancode) {
-                    tx.send(KeyboardMsg {
-                        note,
-                        pressed: state == ElementState::Pressed,
-                    })
-                    .unwrap();
-                }
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                window_id,
-                ..
-            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
-            _ => (),
-        }
-    });
+    app.run(None);
 }
 
 #[derive(Debug)]
@@ -146,22 +154,22 @@ enum Note {
 }
 
 impl Note {
-    fn from_scancode(scancode: ScanCode) -> Option<Self> {
-        Some(match scancode {
-            30 => Note::C4,
-            31 => Note::D4,
-            32 => Note::E4,
-            33 => Note::F4,
-            34 => Note::G4,
-            35 => Note::A4,
-            36 => Note::B4,
-            37 => Note::C5,
+    fn from_code(code: druid_shell::Code) -> Option<Note> {
+        Some(match code {
+            Code::KeyA => Note::C4,
+            Code::KeyS => Note::D4,
+            Code::KeyD => Note::E4,
+            Code::KeyF => Note::F4,
+            Code::KeyG => Note::G4,
+            Code::KeyH => Note::A4,
+            Code::KeyJ => Note::B4,
+            Code::KeyK => Note::C5,
 
-            17 => Note::CSharp4,
-            18 => Note::DSharp4,
-            20 => Note::FSharp4,
-            21 => Note::GSharp4,
-            22 => Note::ASharp4,
+            Code::KeyW => Note::CSharp4,
+            Code::KeyE => Note::DSharp4,
+            Code::KeyT => Note::FSharp4,
+            Code::KeyY => Note::GSharp4,
+            Code::KeyU => Note::ASharp4,
 
             _ => return None,
         })
