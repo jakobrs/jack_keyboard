@@ -59,7 +59,7 @@ impl WinHandler for AppState {
     }
 
     fn prepare_paint(&mut self) {
-        self.handle.invalidate();
+        // self.handle.invalidate();
     }
 
     fn paint(&mut self, _piet: &mut druid_shell::piet::Piet, _invalid: &druid_shell::Region) {
