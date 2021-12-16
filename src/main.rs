@@ -8,31 +8,14 @@ use jack::{Client, ClientOptions, ClosureProcessHandler, ProcessScope, RawMidi};
 use winit::{
     event::{ElementState, Event, KeyboardInput, ScanCode, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::WindowBuilder,
 };
 
 fn main() {
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-
-    #[cfg(unix)]
-    {
-        use winit::platform::unix::EventLoopWindowTargetExtUnix;
-
-        if event_loop.is_wayland() {
-            println!("Running on Wayland");
-        } else if event_loop.is_x11() {
-            println!("Running on X11");
-        }
-    }
-
     let (tx, rx) = mpsc::channel();
 
-    // JACK
     let _async_client = handle_jack(rx);
-
-    // Window, blocking
-    run_window(event_loop, window, tx);
+    run_gui(tx);
 }
 
 fn handle_jack(rx: Receiver<KeyboardMsg>) -> impl Any {
@@ -70,7 +53,21 @@ fn handle_jack(rx: Receiver<KeyboardMsg>) -> impl Any {
         .unwrap()
 }
 
-fn run_window(event_loop: EventLoop<()>, window: Window, tx: Sender<KeyboardMsg>) {
+fn run_gui(tx: Sender<KeyboardMsg>) {
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    #[cfg(unix)]
+    {
+        use winit::platform::unix::EventLoopWindowTargetExtUnix;
+
+        if event_loop.is_wayland() {
+            println!("Running on Wayland");
+        } else if event_loop.is_x11() {
+            println!("Running on X11");
+        }
+    }
+
     let mut active_keys = HashSet::new();
 
     event_loop.run(move |event, _, control_flow| {
