@@ -104,6 +104,11 @@ fn run_window(event_loop: EventLoop<()>, window: Window, tx: Sender<KeyboardMsg>
                     .unwrap();
                 }
             }
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                window_id,
+                ..
+            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
             _ => (),
         }
     });
