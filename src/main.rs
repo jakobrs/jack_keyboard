@@ -15,6 +15,17 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
+    #[cfg(unix)]
+    {
+        use winit::platform::unix::EventLoopWindowTargetExtUnix;
+
+        if event_loop.is_wayland() {
+            println!("Running on Wayland");
+        } else if event_loop.is_x11() {
+            println!("Running on X11");
+        }
+    }
+
     let (tx, rx) = mpsc::channel();
 
     // JACK
