@@ -55,7 +55,7 @@ fn handle_jack(rx: Receiver<KeyboardMsg>) -> impl Any {
 
 fn run_gui(tx: Sender<KeyboardMsg>) {
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new().with_title("JACK keyboard").build(&event_loop).unwrap();
 
     #[cfg(unix)]
     {
